@@ -6,9 +6,6 @@ Resulting tables (all keyed by title_id):
 - availability: 1 row per movie × country × platform         (dataset B)
 - consumption:  1 row per movie × month × country × platform (dataset C)
 
-Key rule: availability and consumption are NEVER joined together.
-They have different grains, and joining them multiplies rows
-(streams get inflated ~7x). Each one is joined only with movies.
 """
 from pathlib import Path
 
@@ -46,7 +43,7 @@ def load_data():
 
 def validate(movies, availability, consumption):
     """Check grains, referential integrity and valid values."""
-    # Grain (equivalent to PRIMARY KEY)
+    # Grain 
     assert not movies.duplicated(subset=["title_id"]).any(), "movies: duplicated title_id"
     assert not availability.duplicated(
         subset=["title_id", "country", "platform"]
@@ -60,19 +57,18 @@ def validate(movies, availability, consumption):
         availability.groupby("platform")["platform_type"].nunique() <= 1
     ).all(), "availability: a platform has more than one type"
 
-    # Referential integrity (equivalent to FOREIGN KEY)
+    # Referential integrity 
     assert availability["title_id"].isin(movies["title_id"]).all(), \
         "availability: movies not found in movies table"
     assert consumption["title_id"].isin(movies["title_id"]).all(), \
         "consumption: movies not found in movies table"
 
-    # Valid values (equivalent to CHECK)
+    # Valid values 
     assert (consumption["streams"] >= 0).all(), "consumption: negative streams"
     assert (consumption["total_minutes"] >= 0).all(), "consumption: negative total_minutes"
 
 
 if __name__ == "__main__":
-    # Runs only with `python data_prep.py`, not when imported.
     movies, availability, consumption, snapshot = load_data()
     print("Validations OK ✔")
     print("movies:      ", movies.shape)
