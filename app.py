@@ -293,5 +293,7 @@ with detail_col:
             "Gaps in the line are months with no records (not shown as zero). "
             f"Consumption data covers {len(consumption_countries)} countries "
             f"({', '.join(consumption_countries)}) and {len(consumption_platforms)} platforms, "
-            "while availability covers more countries."
+            "while availability covers more countries. Platform names follow each source: "
+            "consumption reports Amazon as a single platform, while availability "
+            "distinguishes Amazon Prime Video and Amazon Other."
         )
