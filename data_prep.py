@@ -11,7 +11,6 @@ from pathlib import Path
 
 import pandas as pd
 
-# data/ folder next to this file, regardless of where it is run from.
 DATA_DIR = Path(__file__).parent / "data"
 
 
@@ -20,6 +19,11 @@ def load_data():
     # --- A: movies ---
     movies = pd.read_csv(DATA_DIR / "dataset_A.csv")
     movies.columns = movies.columns.str.lower()
+    # "Comedy, Drama" -> ["Comedy", "Drama"]. Needed for exact genre filtering:
+    # a substring search for "Music" would also match "Musical".
+    movies["genre_list"] = movies["genres"].apply(
+        lambda s: [g.strip() for g in s.split(",")] if isinstance(s, str) else []
+    )
 
     # --- B: availability ---
     availability = pd.read_csv(DATA_DIR / "dataset_B.csv")
@@ -43,7 +47,7 @@ def load_data():
 
 def validate(movies, availability, consumption):
     """Check grains, referential integrity and valid values."""
-    # Grain 
+    # Grain
     assert not movies.duplicated(subset=["title_id"]).any(), "movies: duplicated title_id"
     assert not availability.duplicated(
         subset=["title_id", "country", "platform"]
