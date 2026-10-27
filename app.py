@@ -11,9 +11,11 @@ and are reused across re-runs. User choices that must survive re-runs
 (the query, the selected movie) live in st.session_state.
 """
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 from data_prep import load_data
+from metrics import METRIC_LABELS, SPLIT_OPTIONS, filter_consumption, monthly_series, summarize
 from search import load_embeddings, load_model, search
 
 st.set_page_config(page_title="Movie Intelligence Explorer", page_icon="🎬", layout="wide")
@@ -92,6 +94,8 @@ st.session_state.setdefault("query", "")
 st.session_state.setdefault("selected_id", None)
 
 all_genres = sorted({g for genres in movies["genre_list"] for g in genres})
+consumption_countries = sorted(consumption["country"].unique())
+consumption_platforms = sorted(consumption["platform"].unique())
 snapshot_label = pd.to_datetime(snapshot).strftime("%B %Y")
 
 
@@ -225,6 +229,69 @@ with detail_col:
         )
         st.dataframe(table, hide_index=True, width="stretch")
 
-    # --- Consumption performance (dataset C): next step ---
+    # --- Consumption performance (dataset C, joined only with movies) ---
     st.subheader("Consumption performance")
-    st.caption("Charts coming in the next step.")
+    movie_cons = filter_consumption(consumption, movie["title_id"])
+
+    if movie_cons.empty:
+        st.info("No consumption data recorded for this movie.")
+    else:
+        f1, f2 = st.columns(2)
+        countries = f1.multiselect(
+            "Countries", consumption_countries, key="cons_countries", placeholder="All countries"
+        )
+        platforms = f2.multiselect(
+            "Platforms", consumption_platforms, key="cons_platforms", placeholder="All platforms"
+        )
+        o1, o2 = st.columns(2)
+        metric = o1.radio(
+            "Metric", list(METRIC_LABELS), format_func=METRIC_LABELS.get,
+            horizontal=True, key="cons_metric",
+        )
+        split_label = o2.radio("Show", list(SPLIT_OPTIONS), horizontal=True, key="cons_split")
+        split = SPLIT_OPTIONS[split_label]
+
+        filtered = filter_consumption(consumption, movie["title_id"], countries, platforms)
+
+        if filtered.empty:
+            st.warning("No consumption data for this combination. Try other countries or platforms.")
+        else:
+            stats = summarize(filtered)
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Total streams", fmt_number(stats["total_streams"]))
+            k2.metric("Total minutes", fmt_number(stats["total_minutes"]))
+            k3.metric(
+                "Minutes per stream",
+                fmt_number(stats["minutes_per_stream"]) if stats["minutes_per_stream"] is not None else "N/A",
+                help="Total minutes ÷ total streams.",
+            )
+            k4.metric(
+                "Peak month",
+                stats["peak_month"].strftime("%b %Y") if stats["peak_month"] is not None else "N/A",
+                help="Month with the most streams.",
+            )
+
+            series = monthly_series(filtered, metric, split)
+            fig = px.line(
+                series,
+                x="month",
+                y=metric,
+                color=split,
+                markers=True,
+                labels={"month": "Month", metric: METRIC_LABELS[metric],
+                        "country": "Country", "platform": "Platform"},
+            )
+            fig.update_layout(
+                height=360,
+                margin=dict(l=0, r=0, t=10, b=0),
+                hovermode="x unified",
+                legend=dict(orientation="h", y=-0.2),
+            )
+            st.plotly_chart(fig, width="stretch")
+
+        st.caption(
+            "Gaps in the line are months with no records (not shown as zero). "
+            f"Consumption data covers {len(consumption_countries)} countries "
+            f"({', '.join(consumption_countries)}) and {len(consumption_platforms)} platforms, "
+            "while availability covers more countries."
+        )
